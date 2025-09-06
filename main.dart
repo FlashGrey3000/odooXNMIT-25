@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 void main() {
   runApp(SynergySphereApp());
@@ -31,9 +33,15 @@ class SynergySphereApp extends StatelessWidget {
   }
 }
 
-// Models
+// API Configuration
+class ApiConfig {
+  static const String baseUrl = 'http://localhost:8000'; // Change this to your FastAPI server URL
+  static const Duration timeout = Duration(seconds: 30);
+}
+
+// Models with JSON serialization
 class User {
-  final String id;
+  final int id;
   final String name;
   final String email;
   final String? avatar;
@@ -44,15 +52,33 @@ class User {
     required this.email,
     this.avatar,
   });
+
+  factory User.fromJson(Map<String, dynamic> json) {
+    return User(
+      id: json['user_id'],
+      name: json['name'],
+      email: json['email'],
+      avatar: json['avatar'],
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'user_id': id,
+      'name': name,
+      'email': email,
+      if (avatar != null) 'avatar': avatar,
+    };
+  }
 }
 
 class Project {
-  final String id;
+  final int id;
   final String name;
   final String description;
-  final List<String> memberIds;
+  final List<int> memberIds;
   final DateTime createdAt;
-  final String createdBy;
+  final int createdBy;
 
   Project({
     required this.id,
@@ -62,20 +88,76 @@ class Project {
     required this.createdAt,
     required this.createdBy,
   });
+
+  factory Project.fromJson(Map<String, dynamic> json) {
+    return Project(
+      id: json['project_id'],
+      name: json['name'],
+      description: json['description'] ?? '',
+      memberIds: (json['member_ids'] as List<dynamic>?)?.cast<int>() ?? [],
+      createdAt: DateTime.parse(json['created_at']),
+      createdBy: json['created_by'],
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'project_id': id,
+      'name': name,
+      'description': description,
+      'member_ids': memberIds,
+      'created_at': createdAt.toIso8601String(),
+      'created_by': createdBy,
+    };
+  }
+
+  // For creating new projects (without ID)
+  Map<String, dynamic> toCreateJson() {
+    return {
+      'name': name,
+      'description': description,
+      'created_by': createdBy,
+    };
+  }
 }
 
 enum TaskStatus { toDo, inProgress, done }
 
+extension TaskStatusExtension on TaskStatus {
+  String get dbValue {
+    switch (this) {
+      case TaskStatus.toDo:
+        return 'To-Do';
+      case TaskStatus.inProgress:
+        return 'In Progress';
+      case TaskStatus.done:
+        return 'Done';
+    }
+  }
+
+  static TaskStatus fromDbValue(String value) {
+    switch (value) {
+      case 'To-Do':
+        return TaskStatus.toDo;
+      case 'In Progress':
+        return TaskStatus.inProgress;
+      case 'Done':
+        return TaskStatus.done;
+      default:
+        return TaskStatus.toDo;
+    }
+  }
+}
+
 class Task {
-  final String id;
+  final int id;
   final String title;
   final String description;
-  final String projectId;
-  final String? assigneeId;
+  final int projectId;
+  final int? assigneeId;
   final DateTime? dueDate;
   final TaskStatus status;
   final DateTime createdAt;
-  final String createdBy;
 
   Task({
     required this.id,
@@ -86,19 +168,55 @@ class Task {
     this.dueDate,
     required this.status,
     required this.createdAt,
-    required this.createdBy,
   });
 
+  factory Task.fromJson(Map<String, dynamic> json) {
+    return Task(
+      id: json['task_id'],
+      title: json['title'],
+      description: json['description'] ?? '',
+      projectId: json['project_id'],
+      assigneeId: json['assignee_id'],
+      dueDate: json['due_date'] != null ? DateTime.parse(json['due_date']) : null,
+      status: TaskStatusExtension.fromDbValue(json['status']),
+      createdAt: DateTime.parse(json['created_at']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'task_id': id,
+      'title': title,
+      'description': description,
+      'project_id': projectId,
+      'assignee_id': assigneeId,
+      'due_date': dueDate?.toIso8601String().split('T')[0], // Format as YYYY-MM-DD
+      'status': status.dbValue,
+      'created_at': createdAt.toIso8601String(),
+    };
+  }
+
+  // For creating new tasks (without ID and created_at)
+  Map<String, dynamic> toCreateJson() {
+    return {
+      'title': title,
+      'description': description,
+      'project_id': projectId,
+      'assignee_id': assigneeId,
+      'due_date': dueDate?.toIso8601String().split('T')[0],
+      'status': status.dbValue,
+    };
+  }
+
   Task copyWith({
-    String? id,
+    int? id,
     String? title,
     String? description,
-    String? projectId,
-    String? assigneeId,
+    int? projectId,
+    int? assigneeId,
     DateTime? dueDate,
     TaskStatus? status,
     DateTime? createdAt,
-    String? createdBy,
   }) {
     return Task(
       id: id ?? this.id,
@@ -109,18 +227,17 @@ class Task {
       dueDate: dueDate ?? this.dueDate,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
-      createdBy: createdBy ?? this.createdBy,
     );
   }
 }
 
 class Discussion {
-  final String id;
-  final String projectId;
+  final int id;
+  final int projectId;
   final String title;
   final List<DiscussionMessage> messages;
   final DateTime createdAt;
-  final String createdBy;
+  final int createdBy;
 
   Discussion({
     required this.id,
@@ -130,13 +247,37 @@ class Discussion {
     required this.createdAt,
     required this.createdBy,
   });
+
+  factory Discussion.fromJson(Map<String, dynamic> json) {
+    return Discussion(
+      id: json['discussion_id'],
+      projectId: json['project_id'],
+      title: json['title'],
+      messages: (json['messages'] as List<dynamic>?)
+          ?.map((m) => DiscussionMessage.fromJson(m))
+          .toList() ?? [],
+      createdAt: DateTime.parse(json['created_at']),
+      createdBy: json['created_by'],
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'discussion_id': id,
+      'project_id': projectId,
+      'title': title,
+      'messages': messages.map((m) => m.toJson()).toList(),
+      'created_at': createdAt.toIso8601String(),
+      'created_by': createdBy,
+    };
+  }
 }
 
 class DiscussionMessage {
-  final String id;
-  final String discussionId;
+  final int id;
+  final int discussionId;
   final String message;
-  final String authorId;
+  final int authorId;
   final DateTime timestamp;
 
   DiscussionMessage({
@@ -146,96 +287,331 @@ class DiscussionMessage {
     required this.authorId,
     required this.timestamp,
   });
+
+  factory DiscussionMessage.fromJson(Map<String, dynamic> json) {
+    return DiscussionMessage(
+      id: json['message_id'],
+      discussionId: json['discussion_id'],
+      message: json['message'],
+      authorId: json['author_id'],
+      timestamp: DateTime.parse(json['timestamp']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'message_id': id,
+      'discussion_id': discussionId,
+      'message': message,
+      'author_id': authorId,
+      'timestamp': timestamp.toIso8601String(),
+    };
+  }
 }
 
-// Database Service (Function signatures only)
+// HTTP Service for API communication
+class ApiService {
+  static const String _baseUrl = ApiConfig.baseUrl;
+  static String? _authToken;
+
+  static Map<String, String> get _headers {
+    Map<String, String> headers = {
+      'Content-Type': 'application/json',
+    };
+    if (_authToken != null) {
+      headers['Authorization'] = 'Bearer $_authToken';
+    }
+    return headers;
+  }
+
+  static void setAuthToken(String token) {
+    _authToken = token;
+  }
+
+  static void clearAuthToken() {
+    _authToken = null;
+  }
+
+  // Generic HTTP methods1
+  static Future<http.Response> _get(String endpoint) async {
+    final url = Uri.parse('$_baseUrl$endpoint');
+    return await http.get(url, headers: _headers).timeout(ApiConfig.timeout);
+  }
+
+  static Future<http.Response> _post(String endpoint, Map<String, dynamic> data) async {
+    final url = Uri.parse('$_baseUrl$endpoint');
+    return await http.post(
+      url,
+      headers: _headers,
+      body: json.encode(data),
+    ).timeout(ApiConfig.timeout);
+  }
+
+  static Future<http.Response> _put(String endpoint, Map<String, dynamic> data) async {
+    final url = Uri.parse('$_baseUrl$endpoint');
+    return await http.put(
+      url,
+      headers: _headers,
+      body: json.encode(data),
+    ).timeout(ApiConfig.timeout);
+  }
+
+  static Future<http.Response> _delete(String endpoint) async {
+    final url = Uri.parse('$_baseUrl$endpoint');
+    return await http.delete(url, headers: _headers).timeout(ApiConfig.timeout);
+  }
+
+  // Handle API response
+  static Map<String, dynamic> _handleResponse(http.Response response) {
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return json.decode(response.body);
+    } else {
+      throw Exception('API Error: ${response.statusCode} - ${response.body}');
+    }
+  }
+}
+
+// Database Service with HTTP requests
 class DatabaseService {
   // User Management
   static Future<User?> authenticateUser(String email, String password) async {
-    // TODO: Implement authentication logic
-    throw UnimplementedError();
+    try {
+      final response = await ApiService._post('/auth/login', {
+        'email': email,
+        'password': password,
+      });
+
+      final data = ApiService._handleResponse(response);
+
+      if (data['access_token'] != null) {
+        ApiService.setAuthToken(data['access_token']);
+        return User.fromJson(data['user']);
+      }
+      return null;
+    } catch (e) {
+      print('Authentication error: $e');
+      return null;
+    }
   }
 
   static Future<User> createUser(String name, String email, String password) async {
-    // TODO: Implement user creation
-    throw UnimplementedError();
+    try {
+      final response = await ApiService._post('/auth/register', {
+        'name': name,
+        'email': email,
+        'password': password,
+      });
+
+      final data = ApiService._handleResponse(response);
+
+      if (data['access_token'] != null) {
+        ApiService.setAuthToken(data['access_token']);
+      }
+
+      return User.fromJson(data['user']);
+    } catch (e) {
+      print('User creation error: $e');
+      rethrow;
+    }
   }
 
   static Future<User?> getCurrentUser() async {
-    // TODO: Get current logged in user
-    throw UnimplementedError();
+    try {
+      final response = await ApiService._get('/users/me');
+      final data = ApiService._handleResponse(response);
+      return User.fromJson(data);
+    } catch (e) {
+      print('Get current user error: $e');
+      return null;
+    }
   }
 
   static Future<void> logoutUser() async {
-    // TODO: Implement logout
-    throw UnimplementedError();
+    try {
+      await ApiService._post('/auth/logout', {});
+    } catch (e) {
+      print('Logout error: $e');
+    } finally {
+      ApiService.clearAuthToken();
+    }
   }
 
   // Project Management
-  static Future<List<Project>> getUserProjects(String userId) async {
-    // TODO: Get projects for user
-    throw UnimplementedError();
+  static Future<List<Project>> getUserProjects(int userId) async {
+    try {
+      final response = await ApiService._get('/projects/user/$userId');
+      final data = ApiService._handleResponse(response);
+
+      return (data['projects'] as List)
+          .map((project) => Project.fromJson(project))
+          .toList();
+    } catch (e) {
+      print('Get user projects error: $e');
+      return [];
+    }
   }
 
   static Future<Project> createProject(Project project) async {
-    // TODO: Create new project
-    throw UnimplementedError();
+    try {
+      final response = await ApiService._post('/projects/', project.toCreateJson());
+      final data = ApiService._handleResponse(response);
+      return Project.fromJson(data);
+    } catch (e) {
+      print('Create project error: $e');
+      rethrow;
+    }
   }
 
-  static Future<Project> getProject(String projectId) async {
-    // TODO: Get specific project
-    throw UnimplementedError();
+  static Future<Project> getProject(int projectId) async {
+    try {
+      final response = await ApiService._get('/projects/$projectId');
+      final data = ApiService._handleResponse(response);
+      return Project.fromJson(data);
+    } catch (e) {
+      print('Get project error: $e');
+      rethrow;
+    }
   }
 
-  static Future<List<User>> getProjectMembers(String projectId) async {
-    // TODO: Get project members
-    throw UnimplementedError();
+  static Future<List<User>> getProjectMembers(int projectId) async {
+    try {
+      final response = await ApiService._get('/projects/$projectId/members');
+      final data = ApiService._handleResponse(response);
+
+      return (data['members'] as List)
+          .map((member) => User.fromJson(member))
+          .toList();
+    } catch (e) {
+      print('Get project members error: $e');
+      return [];
+    }
   }
 
-  static Future<void> addProjectMember(String projectId, String userId) async {
-    // TODO: Add member to project
-    throw UnimplementedError();
+  static Future<void> addProjectMember(int projectId, int userId, {String role = 'member'}) async {
+    try {
+      await ApiService._post('/projects/$projectId/members', {
+        'user_id': userId,
+        'role': role,
+      });
+    } catch (e) {
+      print('Add project member error: $e');
+      rethrow;
+    }
+  }
+
+  static Future<void> removeProjectMember(int projectId, int userId) async {
+    try {
+      await ApiService._delete('/projects/$projectId/members/$userId');
+    } catch (e) {
+      print('Remove project member error: $e');
+      rethrow;
+    }
   }
 
   // Task Management
-  static Future<List<Task>> getProjectTasks(String projectId) async {
-    // TODO: Get tasks for project
-    throw UnimplementedError();
+  static Future<List<Task>> getProjectTasks(int projectId) async {
+    try {
+      final response = await ApiService._get('/projects/$projectId/tasks');
+      final data = ApiService._handleResponse(response);
+
+      return (data['tasks'] as List)
+          .map((task) => Task.fromJson(task))
+          .toList();
+    } catch (e) {
+      print('Get project tasks error: $e');
+      return [];
+    }
   }
 
   static Future<Task> createTask(Task task) async {
-    // TODO: Create new task
-    throw UnimplementedError();
+    try {
+      final response = await ApiService._post('/tasks/', task.toCreateJson());
+      final data = ApiService._handleResponse(response);
+      return Task.fromJson(data);
+    } catch (e) {
+      print('Create task error: $e');
+      rethrow;
+    }
   }
 
   static Future<Task> updateTask(Task task) async {
-    // TODO: Update existing task
-    throw UnimplementedError();
+    try {
+      final response = await ApiService._put('/tasks/${task.id}', task.toJson());
+      final data = ApiService._handleResponse(response);
+      return Task.fromJson(data);
+    } catch (e) {
+      print('Update task error: $e');
+      rethrow;
+    }
   }
 
-  static Future<void> deleteTask(String taskId) async {
-    // TODO: Delete task
-    throw UnimplementedError();
+  static Future<void> deleteTask(int taskId) async {
+    try {
+      await ApiService._delete('/tasks/$taskId');
+    } catch (e) {
+      print('Delete task error: $e');
+      rethrow;
+    }
   }
 
   // Discussion Management
-  static Future<List<Discussion>> getProjectDiscussions(String projectId) async {
-    // TODO: Get discussions for project
-    throw UnimplementedError();
+  static Future<List<Discussion>> getProjectDiscussions(int projectId) async {
+    try {
+      final response = await ApiService._get('/projects/$projectId/discussions');
+      final data = ApiService._handleResponse(response);
+
+      return (data['discussions'] as List)
+          .map((discussion) => Discussion.fromJson(discussion))
+          .toList();
+    } catch (e) {
+      print('Get project discussions error: $e');
+      return [];
+    }
   }
 
   static Future<Discussion> createDiscussion(Discussion discussion) async {
-    // TODO: Create new discussion
-    throw UnimplementedError();
+    try {
+      final response = await ApiService._post('/discussions/', {
+        'project_id': discussion.projectId,
+        'title': discussion.title,
+        'created_by': discussion.createdBy,
+      });
+      final data = ApiService._handleResponse(response);
+      return Discussion.fromJson(data);
+    } catch (e) {
+      print('Create discussion error: $e');
+      rethrow;
+    }
   }
 
   static Future<DiscussionMessage> addDiscussionMessage(DiscussionMessage message) async {
-    // TODO: Add message to discussion
-    throw UnimplementedError();
+    try {
+      final response = await ApiService._post('/discussions/${message.discussionId}/messages', {
+        'message': message.message,
+        'author_id': message.authorId,
+      });
+      final data = ApiService._handleResponse(response);
+      return DiscussionMessage.fromJson(data);
+    } catch (e) {
+      print('Add discussion message error: $e');
+      rethrow;
+    }
+  }
+
+  // Utility method to search users by email for adding to projects
+  static Future<User?> searchUserByEmail(String email) async {
+    try {
+      final response = await ApiService._get('/users/search?email=$email');
+      final data = ApiService._handleResponse(response);
+      return User.fromJson(data);
+    } catch (e) {
+      print('Search user by email error: $e');
+      return null;
+    }
   }
 }
 
-// Login Screen
+// Login Screen with HTTP integration
 class LoginScreen extends StatefulWidget {
   @override
   _LoginScreenState createState() => _LoginScreenState();
@@ -397,17 +773,32 @@ class _LoginScreenState extends State<LoginScreen> {
 
       try {
         if (_isSignUp) {
-          // TODO: Implement sign up
-          await Future.delayed(Duration(seconds: 1)); // Simulate API call
-          Navigator.pushReplacementNamed(context, '/dashboard');
+          // Sign up user
+          await DatabaseService.createUser(
+            _nameController.text.trim(),
+            _emailController.text.trim(),
+            _passwordController.text,
+          );
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Account created successfully!')),
+          );
         } else {
-          // TODO: Implement login
-          await Future.delayed(Duration(seconds: 1)); // Simulate API call
-          Navigator.pushReplacementNamed(context, '/dashboard');
+          // Login user
+          final user = await DatabaseService.authenticateUser(
+            _emailController.text.trim(),
+            _passwordController.text,
+          );
+
+          if (user == null) {
+            throw Exception('Invalid credentials');
+          }
         }
+
+        Navigator.pushReplacementNamed(context, '/dashboard');
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Authentication failed. Please try again.')),
+          SnackBar(content: Text('Authentication failed: ${e.toString()}')),
         );
       } finally {
         setState(() {
@@ -426,7 +817,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-// Project Dashboard
+// Project Dashboard with HTTP integration
 class ProjectDashboard extends StatefulWidget {
   @override
   _ProjectDashboardState createState() => _ProjectDashboardState();
@@ -435,44 +826,33 @@ class ProjectDashboard extends StatefulWidget {
 class _ProjectDashboardState extends State<ProjectDashboard> {
   List<Project> projects = [];
   bool _isLoading = true;
+  User? currentUser;
 
   @override
   void initState() {
     super.initState();
-    _loadProjects();
+    _loadUserAndProjects();
   }
 
-  void _loadProjects() async {
+  void _loadUserAndProjects() async {
     setState(() {
       _isLoading = true;
     });
 
     try {
-      // TODO: Load projects from database
-      await Future.delayed(Duration(seconds: 1)); // Simulate API call
+      // Get current user
+      currentUser = await DatabaseService.getCurrentUser();
 
-      // Mock data for demonstration
-      projects = [
-        Project(
-          id: '1',
-          name: 'Mobile App Development',
-          description: 'Building the SynergySphere mobile application',
-          memberIds: ['1', '2', '3'],
-          createdAt: DateTime.now().subtract(Duration(days: 5)),
-          createdBy: '1',
-        ),
-        Project(
-          id: '2',
-          name: 'Website Redesign',
-          description: 'Redesigning company website with modern UI',
-          memberIds: ['1', '4'],
-          createdAt: DateTime.now().subtract(Duration(days: 2)),
-          createdBy: '1',
-        ),
-      ];
+      if (currentUser != null) {
+        // Load user's projects
+        final userProjects = await DatabaseService.getUserProjects(currentUser!.id);
+        setState(() {
+          projects = userProjects;
+        });
+      }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load projects')),
+        SnackBar(content: Text('Failed to load projects: ${e.toString()}')),
       );
     } finally {
       setState(() {
@@ -647,11 +1027,26 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
             child: Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () {
-              if (nameController.text.isNotEmpty) {
-                // TODO: Create project in database
-                Navigator.pop(context);
-                _loadProjects();
+            onPressed: () async {
+              if (nameController.text.isNotEmpty && currentUser != null) {
+                try {
+                  final newProject = Project(
+                    id: 0, // Will be assigned by backend
+                    name: nameController.text.trim(),
+                    description: descriptionController.text.trim(),
+                    memberIds: [currentUser!.id], // Creator is automatically a member
+                    createdAt: DateTime.now(),
+                    createdBy: currentUser!.id,
+                  );
+
+                  await DatabaseService.createProject(newProject);
+                  Navigator.pop(context);
+                  _loadUserAndProjects(); // Reload projects
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to create project: ${e.toString()}')),
+                  );
+                }
               }
             },
             child: Text('Create'),
@@ -662,7 +1057,7 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
   }
 }
 
-// Project Detail Screen - COMPLETELY REWRITTEN
+// Project Detail Screen with HTTP integration
 class ProjectDetailScreen extends StatefulWidget {
   final Project project;
 
@@ -697,55 +1092,25 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
     });
 
     try {
-      // TODO: Load data from database
-      await Future.delayed(Duration(seconds: 1)); // Simulate API call
+      // Load all project data concurrently
+      final Future<List<Task>> tasksFuture = DatabaseService.getProjectTasks(widget.project.id);
+      final Future<List<User>> membersFuture = DatabaseService.getProjectMembers(widget.project.id);
+      final Future<List<Discussion>> discussionsFuture = DatabaseService.getProjectDiscussions(widget.project.id);
 
-      // Mock data
+      final results = await Future.wait([
+        tasksFuture,
+        membersFuture,
+        discussionsFuture,
+      ]);
+
       setState(() {
-        tasks = [
-          Task(
-            id: '1',
-            title: 'Design Login Screen',
-            description: 'Create wireframes and implement login UI',
-            projectId: widget.project.id,
-            assigneeId: '1',
-            dueDate: DateTime.now().add(Duration(days: 3)),
-            status: TaskStatus.inProgress,
-            createdAt: DateTime.now().subtract(Duration(days: 1)),
-            createdBy: '1',
-          ),
-          Task(
-            id: '2',
-            title: 'Set up Database',
-            description: 'Configure database and create initial schema',
-            projectId: widget.project.id,
-            assigneeId: '2',
-            dueDate: DateTime.now().add(Duration(days: 5)),
-            status: TaskStatus.toDo,
-            createdAt: DateTime.now().subtract(Duration(hours: 12)),
-            createdBy: '1',
-          ),
-        ];
-
-        members = [
-          User(id: '1', name: 'John Doe', email: 'john@example.com'),
-          User(id: '2', name: 'Jane Smith', email: 'jane@example.com'),
-        ];
-
-        discussions = [
-          Discussion(
-            id: '1',
-            projectId: widget.project.id,
-            title: 'Project Planning',
-            messages: [],
-            createdAt: DateTime.now().subtract(Duration(days: 2)),
-            createdBy: '1',
-          ),
-        ];
+        tasks = results[0] as List<Task>;
+        members = results[1] as List<User>;
+        discussions = results[2] as List<Discussion>;
       });
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load project data')),
+        SnackBar(content: Text('Failed to load project data: ${e.toString()}')),
       );
     } finally {
       setState(() {
@@ -1032,9 +1397,16 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
                         ),
                       ),
                     ],
-                    onSelected: (value) {
+                    onSelected: (value) async {
                       if (value == 'remove') {
-                        // TODO: Remove member
+                        try {
+                          await DatabaseService.removeProjectMember(widget.project.id, member.id);
+                          _loadProjectData();
+                        } catch (e) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Failed to remove member: ${e.toString()}')),
+                          );
+                        }
                       }
                     },
                   ),
@@ -1133,11 +1505,26 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
     );
   }
 
-  void _sendMessage(String message) {
-    // TODO: Implement send message functionality
-    print('Sending message: $message');
-    // After implementing, reload discussions
-    // _loadProjectData();
+  void _sendMessage(String message) async {
+    try {
+      final currentUser = await DatabaseService.getCurrentUser();
+      if (currentUser != null && discussions.isNotEmpty) {
+        final messageObj = DiscussionMessage(
+          id: 0, // Will be assigned by backend
+          discussionId: discussions.first.id, // Send to first discussion for simplicity
+          message: message,
+          authorId: currentUser.id,
+          timestamp: DateTime.now(),
+        );
+
+        await DatabaseService.addDiscussionMessage(messageObj);
+        _loadProjectData(); // Reload to show new message
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to send message: ${e.toString()}')),
+      );
+    }
   }
 
   void _showCreateDiscussionDialog() {
@@ -1161,11 +1548,29 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
             child: Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               if (titleController.text.trim().isNotEmpty) {
-                // TODO: Create new discussion
-                Navigator.pop(context);
-                _loadProjectData();
+                try {
+                  final currentUser = await DatabaseService.getCurrentUser();
+                  if (currentUser != null) {
+                    final discussion = Discussion(
+                      id: 0, // Will be assigned by backend
+                      projectId: widget.project.id,
+                      title: titleController.text.trim(),
+                      messages: [],
+                      createdAt: DateTime.now(),
+                      createdBy: currentUser.id,
+                    );
+
+                    await DatabaseService.createDiscussion(discussion);
+                    Navigator.pop(context);
+                    _loadProjectData();
+                  }
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to create discussion: ${e.toString()}')),
+                  );
+                }
               }
             },
             child: Text('Start Discussion'),
@@ -1178,8 +1583,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
   void _showTaskDialog({Task? task}) {
     final titleController = TextEditingController(text: task?.title ?? '');
     final descriptionController = TextEditingController(text: task?.description ?? '');
-    String? selectedAssignee = task?.assigneeId;
+    int? selectedAssignee = task?.assigneeId;
     DateTime? selectedDate = task?.dueDate;
+    TaskStatus selectedStatus = task?.status ?? TaskStatus.toDo;
 
     showDialog(
       context: context,
@@ -1207,18 +1613,18 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
                   maxLines: 3,
                 ),
                 SizedBox(height: 16),
-                DropdownButtonFormField<String>(
+                DropdownButtonFormField<int?>(
                   value: selectedAssignee,
                   decoration: InputDecoration(
                     labelText: 'Assignee',
                     border: OutlineInputBorder(),
                   ),
                   items: [
-                    DropdownMenuItem<String>(
+                    DropdownMenuItem<int?>(
                       value: null,
                       child: Text('Unassigned'),
                     ),
-                    ...members.map((member) => DropdownMenuItem<String>(
+                    ...members.map((member) => DropdownMenuItem<int?>(
                       value: member.id,
                       child: Text(member.name),
                     )),
@@ -1229,6 +1635,34 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
                     });
                   },
                 ),
+                if (task != null) ...[
+                  SizedBox(height: 16),
+                  DropdownButtonFormField<TaskStatus>(
+                    value: selectedStatus,
+                    decoration: InputDecoration(
+                      labelText: 'Status',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: TaskStatus.values.map((status) {
+                      String statusText = status == TaskStatus.toDo
+                          ? 'To Do'
+                          : status == TaskStatus.inProgress
+                          ? 'In Progress'
+                          : 'Done';
+                      return DropdownMenuItem<TaskStatus>(
+                        value: status,
+                        child: Text(statusText),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() {
+                          selectedStatus = value;
+                        });
+                      }
+                    },
+                  ),
+                ],
                 SizedBox(height: 16),
                 InkWell(
                   onTap: () async {
@@ -1269,11 +1703,33 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
               child: Text('Cancel'),
             ),
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
                 if (titleController.text.isNotEmpty) {
-                  // TODO: Create/update task in database
-                  Navigator.pop(context);
-                  _loadProjectData();
+                  try {
+                    final taskObj = Task(
+                      id: task?.id ?? 0,
+                      title: titleController.text.trim(),
+                      description: descriptionController.text.trim(),
+                      projectId: widget.project.id,
+                      assigneeId: selectedAssignee,
+                      dueDate: selectedDate,
+                      status: selectedStatus,
+                      createdAt: task?.createdAt ?? DateTime.now(),
+                    );
+
+                    if (task == null) {
+                      await DatabaseService.createTask(taskObj);
+                    } else {
+                      await DatabaseService.updateTask(taskObj);
+                    }
+
+                    Navigator.pop(context);
+                    _loadProjectData();
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Failed to save task: ${e.toString()}')),
+                    );
+                  }
                 }
               },
               child: Text(task == null ? 'Create' : 'Update'),
@@ -1302,11 +1758,18 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
               title: Text(statusText),
               value: status,
               groupValue: task.status,
-              onChanged: (TaskStatus? value) {
+              onChanged: (TaskStatus? value) async {
                 if (value != null) {
-                  // TODO: Update task status in database
-                  Navigator.pop(context);
-                  _loadProjectData();
+                  try {
+                    final updatedTask = task.copyWith(status: value);
+                    await DatabaseService.updateTask(updatedTask);
+                    Navigator.pop(context);
+                    _loadProjectData();
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Failed to update task: ${e.toString()}')),
+                    );
+                  }
                 }
               },
             );
@@ -1353,11 +1816,26 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
             child: Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               if (emailController.text.isNotEmpty) {
-                // TODO: Add member to project
-                Navigator.pop(context);
-                _loadProjectData();
+                try {
+                  // First, search for user by email
+                  final user = await DatabaseService.searchUserByEmail(emailController.text.trim());
+
+                  if (user != null) {
+                    await DatabaseService.addProjectMember(widget.project.id, user.id);
+                    Navigator.pop(context);
+                    _loadProjectData();
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('User not found with this email')),
+                    );
+                  }
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to add member: ${e.toString()}')),
+                  );
+                }
               }
             },
             child: Text('Add'),
@@ -1375,7 +1853,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
   }
 }
 
-// Task Detail Screen
+// Task Detail Screen with HTTP integration
 class TaskDetailScreen extends StatefulWidget {
   final Task task;
   final List<User> members;
@@ -1399,7 +1877,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
   Widget build(BuildContext context) {
     final assignee = widget.members.firstWhere(
           (member) => member.id == currentTask.assigneeId,
-      orElse: () => User(id: '', name: 'Unassigned', email: ''),
+      orElse: () => User(id: 0, name: 'Unassigned', email: ''),
     );
 
     Color statusColor = currentTask.status == TaskStatus.toDo
@@ -1473,7 +1951,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
               'Assignee',
               Icons.person,
               assignee.name,
-              trailing: assignee.id.isNotEmpty
+              trailing: assignee.id != 0
                   ? CircleAvatar(
                 backgroundColor: Colors.blue.shade100,
                 child: Text(
@@ -1521,7 +1999,6 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () {
-                      // TODO: Delete task
                       _showDeleteConfirmation();
                     },
                     icon: Icon(Icons.delete, color: Colors.red),
@@ -1656,7 +2133,7 @@ class ProfileScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     // Mock user data
     final user = User(
-      id: '1',
+      id: 1,
       name: 'John Doe',
       email: 'john.doe@example.com',
     );
@@ -1762,7 +2239,6 @@ class ProfileScreen extends StatelessWidget {
       ),
     );
   }
-
   Widget _buildProfileOption({
     required IconData icon,
     required String title,
