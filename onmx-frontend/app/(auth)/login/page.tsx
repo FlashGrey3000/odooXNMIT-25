@@ -1,15 +1,53 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const router = useRouter();
+  const fastAPIurl = "http://10.57.140.70:8000";
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Login attempt:", { email, password });
+
+    const formData = new URLSearchParams();
+    formData.append("grant_type", "password");
+    formData.append("username", email);
+    formData.append("password", password);
+
+    try {
+      const res = await fetch(`${fastAPIurl}/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: formData.toString(),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        alert(errorData.detail || "Login failed");
+        return;
+      }
+
+      const data = await res.json();
+      console.log("Login success:", data);
+
+      // Save token
+      localStorage.setItem("token", data.access_token);
+      localStorage.setItem("user", JSON.stringify(data.user))
+
+      // Redirect to dashboard
+      router.push("/dashboard");
+    } catch (err) {
+      console.error(err);
+      alert("Could not connect to the server.");
+    }
   };
+
 
   return (
     <div className="flex min-h-screen">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 export default function SignupPage() {
   const [name, setName] = useState("");
@@ -8,7 +9,10 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const fastAPIurl = "http://10.57.140.70:8000";
+  const router = useRouter();
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (password !== confirmPassword) {
@@ -16,8 +20,36 @@ export default function SignupPage() {
       return;
     }
 
-    console.log("Signup attempt:", { name, email, password });
+    try {
+      const res = await fetch(`${fastAPIurl}/signup/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name,
+          email,
+          password,
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        console.error("Signup failed:", errorData);
+        alert(`Error: ${errorData.detail || "Signup failed"}`);
+        return;
+      }
+
+      const data = await res.json();
+      console.log("Signup successful:", data);
+      alert("Signup successful!");
+      router.push("/login");
+    } catch (err) {
+      console.error("Network error:", err);
+      alert("Could not connect to the server.");
+    }
   };
+
 
   return (
     <div className="flex min-h-screen">

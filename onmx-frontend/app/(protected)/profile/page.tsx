@@ -1,18 +1,29 @@
 "use client";
 
-import { useState } from "react";
-import { Switch } from "@headlessui/react"; // headless toggle switch
+import { useState, useEffect } from "react";
+import { Switch } from "@headlessui/react";
 import { PowerIcon } from "@heroicons/react/24/outline";
 
 export default function ProfilePage() {
-  // Example states (replace with real user data)
-  const user = {
-    name: "John Doe",
-    email: "john.doe@example.com",
-  };
-
+  const [user, setUser] = useState<{ name: string; email: string } | null>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [darkModeEnabled, setDarkModeEnabled] = useState(false);
+
+  // Load user from localStorage on mount
+  useEffect(() => {
+    const storedUser = localStorage.getItem("user");
+    if (storedUser) {
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch (err) {
+        console.error("Failed to parse user from localStorage", err);
+      }
+    }
+  }, []);
+
+  if (!user) {
+    return <p className="p-6 text-center text-gray-500">Loading user info...</p>;
+  }
 
   return (
     <div className="max-w-2xl mx-auto p-6">
@@ -66,17 +77,17 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      <form
-        action={async () => {
-        //   "use server";
-          // await signOut({ redirectTo: "/" });
+      <button
+        onClick={() => {
+          localStorage.removeItem("user");
+          localStorage.removeItem("token"); // optional
+          window.location.href = "/login"; // redirect after logout
         }}
+        className="flex items-center gap-2 bg-red-500 text-white px-4 py-2 rounded-lg shadow hover:bg-red-600 transition"
       >
-        <button className="flex items-center gap-2 bg-red-500 text-white px-4 py-2 rounded-lg shadow hover:bg-red-600 transition">
-          <PowerIcon className="w-5 h-5" />
-          Logout
-        </button>
-      </form>
+        <PowerIcon className="w-5 h-5" />
+        Logout
+      </button>
     </div>
   );
 }
