@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+import 'dart:math';
 
 void main() {
   runApp(SynergySphereApp());
@@ -33,15 +32,9 @@ class SynergySphereApp extends StatelessWidget {
   }
 }
 
-// API Configuration
-class ApiConfig {
-  static const String baseUrl = 'http://localhost:8000'; // Change this to your FastAPI server URL
-  static const Duration timeout = Duration(seconds: 30);
-}
-
-// Models with JSON serialization
+// Models
 class User {
-  final int id;
+  final String id;
   final String name;
   final String email;
   final String? avatar;
@@ -52,33 +45,15 @@ class User {
     required this.email,
     this.avatar,
   });
-
-  factory User.fromJson(Map<String, dynamic> json) {
-    return User(
-      id: json['user_id'],
-      name: json['name'],
-      email: json['email'],
-      avatar: json['avatar'],
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'user_id': id,
-      'name': name,
-      'email': email,
-      if (avatar != null) 'avatar': avatar,
-    };
-  }
 }
 
 class Project {
-  final int id;
+  final String id;
   final String name;
   final String description;
-  final List<int> memberIds;
+  final List<String> memberIds;
   final DateTime createdAt;
-  final int createdBy;
+  final String createdBy;
 
   Project({
     required this.id,
@@ -89,75 +64,37 @@ class Project {
     required this.createdBy,
   });
 
-  factory Project.fromJson(Map<String, dynamic> json) {
+  Project copyWith({
+    String? id,
+    String? name,
+    String? description,
+    List<String>? memberIds,
+    DateTime? createdAt,
+    String? createdBy,
+  }) {
     return Project(
-      id: json['project_id'],
-      name: json['name'],
-      description: json['description'] ?? '',
-      memberIds: (json['member_ids'] as List<dynamic>?)?.cast<int>() ?? [],
-      createdAt: DateTime.parse(json['created_at']),
-      createdBy: json['created_by'],
+      id: id ?? this.id,
+      name: name ?? this.name,
+      description: description ?? this.description,
+      memberIds: memberIds ?? this.memberIds,
+      createdAt: createdAt ?? this.createdAt,
+      createdBy: createdBy ?? this.createdBy,
     );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'project_id': id,
-      'name': name,
-      'description': description,
-      'member_ids': memberIds,
-      'created_at': createdAt.toIso8601String(),
-      'created_by': createdBy,
-    };
-  }
-
-  // For creating new projects (without ID)
-  Map<String, dynamic> toCreateJson() {
-    return {
-      'name': name,
-      'description': description,
-      'created_by': createdBy,
-    };
   }
 }
 
 enum TaskStatus { toDo, inProgress, done }
 
-extension TaskStatusExtension on TaskStatus {
-  String get dbValue {
-    switch (this) {
-      case TaskStatus.toDo:
-        return 'To-Do';
-      case TaskStatus.inProgress:
-        return 'In Progress';
-      case TaskStatus.done:
-        return 'Done';
-    }
-  }
-
-  static TaskStatus fromDbValue(String value) {
-    switch (value) {
-      case 'To-Do':
-        return TaskStatus.toDo;
-      case 'In Progress':
-        return TaskStatus.inProgress;
-      case 'Done':
-        return TaskStatus.done;
-      default:
-        return TaskStatus.toDo;
-    }
-  }
-}
-
 class Task {
-  final int id;
+  final String id;
   final String title;
   final String description;
-  final int projectId;
-  final int? assigneeId;
+  final String projectId;
+  final String? assigneeId;
   final DateTime? dueDate;
   final TaskStatus status;
   final DateTime createdAt;
+  final String createdBy;
 
   Task({
     required this.id,
@@ -168,55 +105,19 @@ class Task {
     this.dueDate,
     required this.status,
     required this.createdAt,
+    required this.createdBy,
   });
 
-  factory Task.fromJson(Map<String, dynamic> json) {
-    return Task(
-      id: json['task_id'],
-      title: json['title'],
-      description: json['description'] ?? '',
-      projectId: json['project_id'],
-      assigneeId: json['assignee_id'],
-      dueDate: json['due_date'] != null ? DateTime.parse(json['due_date']) : null,
-      status: TaskStatusExtension.fromDbValue(json['status']),
-      createdAt: DateTime.parse(json['created_at']),
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'task_id': id,
-      'title': title,
-      'description': description,
-      'project_id': projectId,
-      'assignee_id': assigneeId,
-      'due_date': dueDate?.toIso8601String().split('T')[0], // Format as YYYY-MM-DD
-      'status': status.dbValue,
-      'created_at': createdAt.toIso8601String(),
-    };
-  }
-
-  // For creating new tasks (without ID and created_at)
-  Map<String, dynamic> toCreateJson() {
-    return {
-      'title': title,
-      'description': description,
-      'project_id': projectId,
-      'assignee_id': assigneeId,
-      'due_date': dueDate?.toIso8601String().split('T')[0],
-      'status': status.dbValue,
-    };
-  }
-
   Task copyWith({
-    int? id,
+    String? id,
     String? title,
     String? description,
-    int? projectId,
-    int? assigneeId,
+    String? projectId,
+    String? assigneeId,
     DateTime? dueDate,
     TaskStatus? status,
     DateTime? createdAt,
+    String? createdBy,
   }) {
     return Task(
       id: id ?? this.id,
@@ -227,17 +128,18 @@ class Task {
       dueDate: dueDate ?? this.dueDate,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
+      createdBy: createdBy ?? this.createdBy,
     );
   }
 }
 
 class Discussion {
-  final int id;
-  final int projectId;
+  final String id;
+  final String projectId;
   final String title;
   final List<DiscussionMessage> messages;
   final DateTime createdAt;
-  final int createdBy;
+  final String createdBy;
 
   Discussion({
     required this.id,
@@ -248,36 +150,30 @@ class Discussion {
     required this.createdBy,
   });
 
-  factory Discussion.fromJson(Map<String, dynamic> json) {
+  Discussion copyWith({
+    String? id,
+    String? projectId,
+    String? title,
+    List<DiscussionMessage>? messages,
+    DateTime? createdAt,
+    String? createdBy,
+  }) {
     return Discussion(
-      id: json['discussion_id'],
-      projectId: json['project_id'],
-      title: json['title'],
-      messages: (json['messages'] as List<dynamic>?)
-          ?.map((m) => DiscussionMessage.fromJson(m))
-          .toList() ?? [],
-      createdAt: DateTime.parse(json['created_at']),
-      createdBy: json['created_by'],
+      id: id ?? this.id,
+      projectId: projectId ?? this.projectId,
+      title: title ?? this.title,
+      messages: messages ?? this.messages,
+      createdAt: createdAt ?? this.createdAt,
+      createdBy: createdBy ?? this.createdBy,
     );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'discussion_id': id,
-      'project_id': projectId,
-      'title': title,
-      'messages': messages.map((m) => m.toJson()).toList(),
-      'created_at': createdAt.toIso8601String(),
-      'created_by': createdBy,
-    };
   }
 }
 
 class DiscussionMessage {
-  final int id;
-  final int discussionId;
+  final String id;
+  final String discussionId;
   final String message;
-  final int authorId;
+  final String authorId;
   final DateTime timestamp;
 
   DiscussionMessage({
@@ -287,331 +183,297 @@ class DiscussionMessage {
     required this.authorId,
     required this.timestamp,
   });
-
-  factory DiscussionMessage.fromJson(Map<String, dynamic> json) {
-    return DiscussionMessage(
-      id: json['message_id'],
-      discussionId: json['discussion_id'],
-      message: json['message'],
-      authorId: json['author_id'],
-      timestamp: DateTime.parse(json['timestamp']),
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'message_id': id,
-      'discussion_id': discussionId,
-      'message': message,
-      'author_id': authorId,
-      'timestamp': timestamp.toIso8601String(),
-    };
-  }
 }
 
-// HTTP Service for API communication
-class ApiService {
-  static const String _baseUrl = ApiConfig.baseUrl;
-  static String? _authToken;
+// In-Memory Data Store
+class DataStore {
+  static User? _currentUser;
+  static List<User> _users = [];
+  static List<Project> _projects = [];
+  static List<Task> _tasks = [];
+  static List<Discussion> _discussions = [];
+  static List<DiscussionMessage> _messages = [];
 
-  static Map<String, String> get _headers {
-    Map<String, String> headers = {
-      'Content-Type': 'application/json',
-    };
-    if (_authToken != null) {
-      headers['Authorization'] = 'Bearer $_authToken';
-    }
-    return headers;
+  // Initialize with sample data
+  static void initialize() {
+    _users = [
+      User(id: '1', name: 'John Doe', email: 'john@example.com'),
+      User(id: '2', name: 'Jane Smith', email: 'jane@example.com'),
+      User(id: '3', name: 'Mike Johnson', email: 'mike@example.com'),
+      User(id: '4', name: 'Sarah Wilson', email: 'sarah@example.com'),
+    ];
+
+    _projects = [
+      Project(
+        id: '1',
+        name: 'Mobile App Development',
+        description: 'Building the SynergySphere mobile application',
+        memberIds: ['1', '2', '3'],
+        createdAt: DateTime.now().subtract(Duration(days: 5)),
+        createdBy: '1',
+      ),
+      Project(
+        id: '2',
+        name: 'Website Redesign',
+        description: 'Redesigning company website with modern UI',
+        memberIds: ['1', '4'],
+        createdAt: DateTime.now().subtract(Duration(days: 2)),
+        createdBy: '1',
+      ),
+    ];
+
+    _tasks = [
+      Task(
+        id: '1',
+        title: 'Design Login Screen',
+        description: 'Create wireframes and implement login UI',
+        projectId: '1',
+        assigneeId: '2',
+        dueDate: DateTime.now().add(Duration(days: 3)),
+        status: TaskStatus.inProgress,
+        createdAt: DateTime.now().subtract(Duration(days: 1)),
+        createdBy: '1',
+      ),
+      Task(
+        id: '2',
+        title: 'Set up Database',
+        description: 'Configure database and create initial schema',
+        projectId: '1',
+        assigneeId: '3',
+        dueDate: DateTime.now().add(Duration(days: 5)),
+        status: TaskStatus.toDo,
+        createdAt: DateTime.now().subtract(Duration(hours: 12)),
+        createdBy: '1',
+      ),
+      Task(
+        id: '3',
+        title: 'Create Homepage Design',
+        description: 'Design new homepage layout and components',
+        projectId: '2',
+        assigneeId: '4',
+        dueDate: DateTime.now().add(Duration(days: 2)),
+        status: TaskStatus.done,
+        createdAt: DateTime.now().subtract(Duration(days: 3)),
+        createdBy: '1',
+      ),
+    ];
+
+    _discussions = [
+      Discussion(
+        id: '1',
+        projectId: '1',
+        title: 'Project Planning',
+        messages: [],
+        createdAt: DateTime.now().subtract(Duration(days: 2)),
+        createdBy: '1',
+      ),
+      Discussion(
+        id: '2',
+        projectId: '2',
+        title: 'Design Review',
+        messages: [],
+        createdAt: DateTime.now().subtract(Duration(days: 1)),
+        createdBy: '1',
+      ),
+    ];
   }
 
-  static void setAuthToken(String token) {
-    _authToken = token;
+  // Helper method to generate IDs
+  static String generateId() {
+    return DateTime.now().millisecondsSinceEpoch.toString() +
+        Random().nextInt(1000).toString();
   }
 
-  static void clearAuthToken() {
-    _authToken = null;
-  }
-
-  // Generic HTTP methods1
-  static Future<http.Response> _get(String endpoint) async {
-    final url = Uri.parse('$_baseUrl$endpoint');
-    return await http.get(url, headers: _headers).timeout(ApiConfig.timeout);
-  }
-
-  static Future<http.Response> _post(String endpoint, Map<String, dynamic> data) async {
-    final url = Uri.parse('$_baseUrl$endpoint');
-    return await http.post(
-      url,
-      headers: _headers,
-      body: json.encode(data),
-    ).timeout(ApiConfig.timeout);
-  }
-
-  static Future<http.Response> _put(String endpoint, Map<String, dynamic> data) async {
-    final url = Uri.parse('$_baseUrl$endpoint');
-    return await http.put(
-      url,
-      headers: _headers,
-      body: json.encode(data),
-    ).timeout(ApiConfig.timeout);
-  }
-
-  static Future<http.Response> _delete(String endpoint) async {
-    final url = Uri.parse('$_baseUrl$endpoint');
-    return await http.delete(url, headers: _headers).timeout(ApiConfig.timeout);
-  }
-
-  // Handle API response
-  static Map<String, dynamic> _handleResponse(http.Response response) {
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      return json.decode(response.body);
-    } else {
-      throw Exception('API Error: ${response.statusCode} - ${response.body}');
-    }
-  }
-}
-
-// Database Service with HTTP requests
-class DatabaseService {
   // User Management
   static Future<User?> authenticateUser(String email, String password) async {
-    try {
-      final response = await ApiService._post('/auth/login', {
-        'email': email,
-        'password': password,
-      });
-
-      final data = ApiService._handleResponse(response);
-
-      if (data['access_token'] != null) {
-        ApiService.setAuthToken(data['access_token']);
-        return User.fromJson(data['user']);
-      }
-      return null;
-    } catch (e) {
-      print('Authentication error: $e');
-      return null;
-    }
+    await Future.delayed(Duration(seconds: 1));
+    final user = _users.firstWhere(
+          (u) => u.email == email,
+      orElse: () => User(id: generateId(), name: 'Test User', email: email),
+    );
+    _currentUser = user;
+    return user;
   }
 
   static Future<User> createUser(String name, String email, String password) async {
-    try {
-      final response = await ApiService._post('/auth/register', {
-        'name': name,
-        'email': email,
-        'password': password,
-      });
-
-      final data = ApiService._handleResponse(response);
-
-      if (data['access_token'] != null) {
-        ApiService.setAuthToken(data['access_token']);
-      }
-
-      return User.fromJson(data['user']);
-    } catch (e) {
-      print('User creation error: $e');
-      rethrow;
-    }
+    await Future.delayed(Duration(seconds: 1));
+    final user = User(
+      id: generateId(),
+      name: name,
+      email: email,
+    );
+    _users.add(user);
+    _currentUser = user;
+    return user;
   }
 
   static Future<User?> getCurrentUser() async {
-    try {
-      final response = await ApiService._get('/users/me');
-      final data = ApiService._handleResponse(response);
-      return User.fromJson(data);
-    } catch (e) {
-      print('Get current user error: $e');
-      return null;
-    }
+    return _currentUser;
   }
 
   static Future<void> logoutUser() async {
-    try {
-      await ApiService._post('/auth/logout', {});
-    } catch (e) {
-      print('Logout error: $e');
-    } finally {
-      ApiService.clearAuthToken();
-    }
+    _currentUser = null;
   }
 
   // Project Management
-  static Future<List<Project>> getUserProjects(int userId) async {
-    try {
-      final response = await ApiService._get('/projects/user/$userId');
-      final data = ApiService._handleResponse(response);
+  static Future<List<Project>> getUserProjects(String userId) async {
+    await Future.delayed(Duration(milliseconds: 500));
+    return _projects.where((p) => p.memberIds.contains(userId)).toList();
+  }
 
-      return (data['projects'] as List)
-          .map((project) => Project.fromJson(project))
+  static Future<Project> createProject(String name, String description) async {
+    await Future.delayed(Duration(milliseconds: 500));
+    final project = Project(
+      id: generateId(),
+      name: name,
+      description: description,
+      memberIds: [_currentUser!.id],
+      createdAt: DateTime.now(),
+      createdBy: _currentUser!.id,
+    );
+    _projects.add(project);
+    return project;
+  }
+
+  static Future<Project> getProject(String projectId) async {
+    await Future.delayed(Duration(milliseconds: 300));
+    return _projects.firstWhere((p) => p.id == projectId);
+  }
+
+  static Future<List<User>> getProjectMembers(String projectId) async {
+    await Future.delayed(Duration(milliseconds: 300));
+    final project = _projects.firstWhere((p) => p.id == projectId);
+    return _users.where((u) => project.memberIds.contains(u.id)).toList();
+  }
+
+  static Future<void> addProjectMember(String projectId, String email) async {
+    await Future.delayed(Duration(milliseconds: 500));
+    final user = _users.firstWhere(
+          (u) => u.email == email,
+      orElse: () => User(
+        id: generateId(),
+        name: email.split('@')[0],
+        email: email,
+      ),
+    );
+
+    if (!_users.contains(user)) {
+      _users.add(user);
+    }
+
+    final projectIndex = _projects.indexWhere((p) => p.id == projectId);
+    if (projectIndex != -1 && !_projects[projectIndex].memberIds.contains(user.id)) {
+      _projects[projectIndex] = _projects[projectIndex].copyWith(
+        memberIds: [..._projects[projectIndex].memberIds, user.id],
+      );
+    }
+  }
+
+  static Future<void> removeProjectMember(String projectId, String userId) async {
+    await Future.delayed(Duration(milliseconds: 500));
+    final projectIndex = _projects.indexWhere((p) => p.id == projectId);
+    if (projectIndex != -1) {
+      final updatedMemberIds = _projects[projectIndex].memberIds
+          .where((id) => id != userId)
           .toList();
-    } catch (e) {
-      print('Get user projects error: $e');
-      return [];
-    }
-  }
-
-  static Future<Project> createProject(Project project) async {
-    try {
-      final response = await ApiService._post('/projects/', project.toCreateJson());
-      final data = ApiService._handleResponse(response);
-      return Project.fromJson(data);
-    } catch (e) {
-      print('Create project error: $e');
-      rethrow;
-    }
-  }
-
-  static Future<Project> getProject(int projectId) async {
-    try {
-      final response = await ApiService._get('/projects/$projectId');
-      final data = ApiService._handleResponse(response);
-      return Project.fromJson(data);
-    } catch (e) {
-      print('Get project error: $e');
-      rethrow;
-    }
-  }
-
-  static Future<List<User>> getProjectMembers(int projectId) async {
-    try {
-      final response = await ApiService._get('/projects/$projectId/members');
-      final data = ApiService._handleResponse(response);
-
-      return (data['members'] as List)
-          .map((member) => User.fromJson(member))
-          .toList();
-    } catch (e) {
-      print('Get project members error: $e');
-      return [];
-    }
-  }
-
-  static Future<void> addProjectMember(int projectId, int userId, {String role = 'member'}) async {
-    try {
-      await ApiService._post('/projects/$projectId/members', {
-        'user_id': userId,
-        'role': role,
-      });
-    } catch (e) {
-      print('Add project member error: $e');
-      rethrow;
-    }
-  }
-
-  static Future<void> removeProjectMember(int projectId, int userId) async {
-    try {
-      await ApiService._delete('/projects/$projectId/members/$userId');
-    } catch (e) {
-      print('Remove project member error: $e');
-      rethrow;
+      _projects[projectIndex] = _projects[projectIndex].copyWith(
+        memberIds: updatedMemberIds,
+      );
     }
   }
 
   // Task Management
-  static Future<List<Task>> getProjectTasks(int projectId) async {
-    try {
-      final response = await ApiService._get('/projects/$projectId/tasks');
-      final data = ApiService._handleResponse(response);
-
-      return (data['tasks'] as List)
-          .map((task) => Task.fromJson(task))
-          .toList();
-    } catch (e) {
-      print('Get project tasks error: $e');
-      return [];
-    }
+  static Future<List<Task>> getProjectTasks(String projectId) async {
+    await Future.delayed(Duration(milliseconds: 300));
+    return _tasks.where((t) => t.projectId == projectId).toList();
   }
 
-  static Future<Task> createTask(Task task) async {
-    try {
-      final response = await ApiService._post('/tasks/', task.toCreateJson());
-      final data = ApiService._handleResponse(response);
-      return Task.fromJson(data);
-    } catch (e) {
-      print('Create task error: $e');
-      rethrow;
-    }
+  static Future<Task> createTask(String title, String description, String projectId,
+      {String? assigneeId, DateTime? dueDate}) async {
+    await Future.delayed(Duration(milliseconds: 500));
+    final task = Task(
+      id: generateId(),
+      title: title,
+      description: description,
+      projectId: projectId,
+      assigneeId: assigneeId,
+      dueDate: dueDate,
+      status: TaskStatus.toDo,
+      createdAt: DateTime.now(),
+      createdBy: _currentUser!.id,
+    );
+    _tasks.add(task);
+    return task;
   }
 
   static Future<Task> updateTask(Task task) async {
-    try {
-      final response = await ApiService._put('/tasks/${task.id}', task.toJson());
-      final data = ApiService._handleResponse(response);
-      return Task.fromJson(data);
-    } catch (e) {
-      print('Update task error: $e');
-      rethrow;
+    await Future.delayed(Duration(milliseconds: 500));
+    final index = _tasks.indexWhere((t) => t.id == task.id);
+    if (index != -1) {
+      _tasks[index] = task;
     }
+    return task;
   }
 
-  static Future<void> deleteTask(int taskId) async {
-    try {
-      await ApiService._delete('/tasks/$taskId');
-    } catch (e) {
-      print('Delete task error: $e');
-      rethrow;
-    }
+  static Future<void> deleteTask(String taskId) async {
+    await Future.delayed(Duration(milliseconds: 500));
+    _tasks.removeWhere((t) => t.id == taskId);
   }
 
   // Discussion Management
-  static Future<List<Discussion>> getProjectDiscussions(int projectId) async {
-    try {
-      final response = await ApiService._get('/projects/$projectId/discussions');
-      final data = ApiService._handleResponse(response);
-
-      return (data['discussions'] as List)
-          .map((discussion) => Discussion.fromJson(discussion))
-          .toList();
-    } catch (e) {
-      print('Get project discussions error: $e');
-      return [];
-    }
+  static Future<List<Discussion>> getProjectDiscussions(String projectId) async {
+    await Future.delayed(Duration(milliseconds: 300));
+    return _discussions.where((d) => d.projectId == projectId).toList();
   }
 
-  static Future<Discussion> createDiscussion(Discussion discussion) async {
-    try {
-      final response = await ApiService._post('/discussions/', {
-        'project_id': discussion.projectId,
-        'title': discussion.title,
-        'created_by': discussion.createdBy,
-      });
-      final data = ApiService._handleResponse(response);
-      return Discussion.fromJson(data);
-    } catch (e) {
-      print('Create discussion error: $e');
-      rethrow;
-    }
+  static Future<Discussion> createDiscussion(String title, String projectId) async {
+    await Future.delayed(Duration(milliseconds: 500));
+    final discussion = Discussion(
+      id: generateId(),
+      projectId: projectId,
+      title: title,
+      messages: [],
+      createdAt: DateTime.now(),
+      createdBy: _currentUser!.id,
+    );
+    _discussions.add(discussion);
+    return discussion;
   }
 
-  static Future<DiscussionMessage> addDiscussionMessage(DiscussionMessage message) async {
-    try {
-      final response = await ApiService._post('/discussions/${message.discussionId}/messages', {
-        'message': message.message,
-        'author_id': message.authorId,
-      });
-      final data = ApiService._handleResponse(response);
-      return DiscussionMessage.fromJson(data);
-    } catch (e) {
-      print('Add discussion message error: $e');
-      rethrow;
+  static Future<DiscussionMessage> addDiscussionMessage(String discussionId, String message) async {
+    await Future.delayed(Duration(milliseconds: 500));
+    final discussionMessage = DiscussionMessage(
+      id: generateId(),
+      discussionId: discussionId,
+      message: message,
+      authorId: _currentUser!.id,
+      timestamp: DateTime.now(),
+    );
+    _messages.add(discussionMessage);
+
+    final discussionIndex = _discussions.indexWhere((d) => d.id == discussionId);
+    if (discussionIndex != -1) {
+      _discussions[discussionIndex] = _discussions[discussionIndex].copyWith(
+        messages: [..._discussions[discussionIndex].messages, discussionMessage],
+      );
     }
+
+    return discussionMessage;
   }
 
-  // Utility method to search users by email for adding to projects
-  static Future<User?> searchUserByEmail(String email) async {
-    try {
-      final response = await ApiService._get('/users/search?email=$email');
-      final data = ApiService._handleResponse(response);
-      return User.fromJson(data);
-    } catch (e) {
-      print('Search user by email error: $e');
-      return null;
-    }
+  static Future<List<DiscussionMessage>> getDiscussionMessages(String discussionId) async {
+    await Future.delayed(Duration(milliseconds: 300));
+    return _messages.where((m) => m.discussionId == discussionId).toList();
+  }
+
+  // Get all users for dropdowns
+  static Future<List<User>> getAllUsers() async {
+    await Future.delayed(Duration(milliseconds: 200));
+    return List.from(_users);
   }
 }
 
-// Login Screen with HTTP integration
+// Login Screen
 class LoginScreen extends StatefulWidget {
   @override
   _LoginScreenState createState() => _LoginScreenState();
@@ -626,6 +488,12 @@ class _LoginScreenState extends State<LoginScreen> {
   final _nameController = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    DataStore.initialize();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
@@ -637,7 +505,6 @@ class _LoginScreenState extends State<LoginScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 SizedBox(height: 60),
-                // Logo
                 Container(
                   width: 120,
                   height: 120,
@@ -753,7 +620,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 if (!_isSignUp)
                   TextButton(
                     onPressed: () {
-                      // TODO: Implement forgot password
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Password reset not implemented in demo')),
+                      );
                     },
                     child: Text('Forgot Password?'),
                   ),
@@ -773,32 +642,21 @@ class _LoginScreenState extends State<LoginScreen> {
 
       try {
         if (_isSignUp) {
-          // Sign up user
-          await DatabaseService.createUser(
-            _nameController.text.trim(),
-            _emailController.text.trim(),
+          await DataStore.createUser(
+            _nameController.text,
+            _emailController.text,
             _passwordController.text,
-          );
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Account created successfully!')),
           );
         } else {
-          // Login user
-          final user = await DatabaseService.authenticateUser(
-            _emailController.text.trim(),
+          await DataStore.authenticateUser(
+            _emailController.text,
             _passwordController.text,
           );
-
-          if (user == null) {
-            throw Exception('Invalid credentials');
-          }
         }
-
         Navigator.pushReplacementNamed(context, '/dashboard');
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Authentication failed: ${e.toString()}')),
+          SnackBar(content: Text('Authentication failed. Please try again.')),
         );
       } finally {
         setState(() {
@@ -817,7 +675,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-// Project Dashboard with HTTP integration
+// Project Dashboard
 class ProjectDashboard extends StatefulWidget {
   @override
   _ProjectDashboardState createState() => _ProjectDashboardState();
@@ -826,33 +684,27 @@ class ProjectDashboard extends StatefulWidget {
 class _ProjectDashboardState extends State<ProjectDashboard> {
   List<Project> projects = [];
   bool _isLoading = true;
-  User? currentUser;
+  User? _currentUser;
 
   @override
   void initState() {
     super.initState();
-    _loadUserAndProjects();
+    _loadProjects();
   }
 
-  void _loadUserAndProjects() async {
+  void _loadProjects() async {
     setState(() {
       _isLoading = true;
     });
 
     try {
-      // Get current user
-      currentUser = await DatabaseService.getCurrentUser();
-
-      if (currentUser != null) {
-        // Load user's projects
-        final userProjects = await DatabaseService.getUserProjects(currentUser!.id);
-        setState(() {
-          projects = userProjects;
-        });
+      _currentUser = await DataStore.getCurrentUser();
+      if (_currentUser != null) {
+        projects = await DataStore.getUserProjects(_currentUser!.id);
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load projects: ${e.toString()}')),
+        SnackBar(content: Text('Failed to load projects')),
       );
     } finally {
       setState(() {
@@ -866,6 +718,7 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Projects'),
+        automaticallyImplyLeading: false,
         actions: [
           IconButton(
             icon: Icon(Icons.person),
@@ -973,7 +826,7 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
                 MaterialPageRoute(
                   builder: (context) => ProjectDetailScreen(project: project),
                 ),
-              );
+              ).then((_) => _loadProjects()); // Refresh when returning
             },
           ),
         );
@@ -1028,23 +881,20 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
           ),
           ElevatedButton(
             onPressed: () async {
-              if (nameController.text.isNotEmpty && currentUser != null) {
+              if (nameController.text.isNotEmpty) {
                 try {
-                  final newProject = Project(
-                    id: 0, // Will be assigned by backend
-                    name: nameController.text.trim(),
-                    description: descriptionController.text.trim(),
-                    memberIds: [currentUser!.id], // Creator is automatically a member
-                    createdAt: DateTime.now(),
-                    createdBy: currentUser!.id,
+                  await DataStore.createProject(
+                    nameController.text,
+                    descriptionController.text,
                   );
-
-                  await DatabaseService.createProject(newProject);
                   Navigator.pop(context);
-                  _loadUserAndProjects(); // Reload projects
+                  _loadProjects();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Project created successfully!')),
+                  );
                 } catch (e) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Failed to create project: ${e.toString()}')),
+                    SnackBar(content: Text('Failed to create project')),
                   );
                 }
               }
@@ -1057,7 +907,7 @@ class _ProjectDashboardState extends State<ProjectDashboard> {
   }
 }
 
-// Project Detail Screen with HTTP integration
+// Project Detail Screen
 class ProjectDetailScreen extends StatefulWidget {
   final Project project;
 
@@ -1081,7 +931,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() {
-      setState(() {}); // Rebuild FAB when tab changes
+      setState(() {});
     });
     _loadProjectData();
   }
@@ -1092,25 +942,20 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
     });
 
     try {
-      // Load all project data concurrently
-      final Future<List<Task>> tasksFuture = DatabaseService.getProjectTasks(widget.project.id);
-      final Future<List<User>> membersFuture = DatabaseService.getProjectMembers(widget.project.id);
-      final Future<List<Discussion>> discussionsFuture = DatabaseService.getProjectDiscussions(widget.project.id);
-
-      final results = await Future.wait([
-        tasksFuture,
-        membersFuture,
-        discussionsFuture,
+      final futures = await Future.wait([
+        DataStore.getProjectTasks(widget.project.id),
+        DataStore.getProjectDiscussions(widget.project.id),
+        DataStore.getProjectMembers(widget.project.id),
       ]);
 
       setState(() {
-        tasks = results[0] as List<Task>;
-        members = results[1] as List<User>;
-        discussions = results[2] as List<Discussion>;
+        tasks = futures[0] as List<Task>;
+        discussions = futures[1] as List<Discussion>;
+        members = futures[2] as List<User>;
       });
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load project data: ${e.toString()}')),
+        SnackBar(content: Text('Failed to load project data')),
       );
     } finally {
       setState(() {
@@ -1151,19 +996,19 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
     int currentIndex = _tabController.index;
 
     switch (currentIndex) {
-      case 0: // Tasks tab
+      case 0:
         return FloatingActionButton(
           onPressed: () => _showTaskDialog(),
           heroTag: "tasks_fab",
           child: Icon(Icons.add_task),
         );
-      case 1: // Team tab
+      case 1:
         return FloatingActionButton(
           onPressed: _showAddMemberDialog,
           heroTag: "team_fab",
           child: Icon(Icons.person_add),
         );
-      case 2: // Chat tab
+      case 2:
         return FloatingActionButton(
           onPressed: _showCreateDiscussionDialog,
           heroTag: "chat_fab",
@@ -1181,7 +1026,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
   Widget _buildTasksTab() {
     return Column(
       children: [
-        // Task Progress Summary
         Container(
           margin: EdgeInsets.all(16),
           padding: EdgeInsets.all(16),
@@ -1199,7 +1043,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
           ),
         ),
 
-        // Task List
         Expanded(
           child: tasks.isEmpty
               ? Center(
@@ -1253,7 +1096,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
         ? Colors.orange
         : Colors.green;
 
-    // Find assignee from members list
     User? assignee;
     if (task.assigneeId != null) {
       try {
@@ -1328,12 +1170,24 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
                 ],
               ),
             ),
+            PopupMenuItem(
+              value: 'delete',
+              child: Row(
+                children: [
+                  Icon(Icons.delete, size: 16, color: Colors.red),
+                  SizedBox(width: 8),
+                  Text('Delete', style: TextStyle(color: Colors.red)),
+                ],
+              ),
+            ),
           ],
           onSelected: (value) {
             if (value == 'edit') {
               _showTaskDialog(task: task);
             } else if (value == 'status') {
               _showStatusDialog(task);
+            } else if (value == 'delete') {
+              _showDeleteTaskDialog(task);
             }
           },
         ),
@@ -1400,11 +1254,14 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
                     onSelected: (value) async {
                       if (value == 'remove') {
                         try {
-                          await DatabaseService.removeProjectMember(widget.project.id, member.id);
+                          await DataStore.removeProjectMember(widget.project.id, member.id);
                           _loadProjectData();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Member removed successfully')),
+                          );
                         } catch (e) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Failed to remove member: ${e.toString()}')),
+                            SnackBar(content: Text('Failed to remove member')),
                           );
                         }
                       }
@@ -1455,7 +1312,15 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
                     style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                   ),
                   onTap: () {
-                    // TODO: Navigate to discussion detail
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => DiscussionDetailScreen(
+                          discussion: discussion,
+                          members: members,
+                        ),
+                      ),
+                    ).then((_) => _loadProjectData());
                   },
                 ),
               );
@@ -1481,7 +1346,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
                   ),
                   onSubmitted: (value) {
                     if (value.trim().isNotEmpty) {
-                      _sendMessage(value.trim());
+                      _sendQuickMessage(value.trim());
                       _messageController.clear();
                     }
                   },
@@ -1492,7 +1357,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
                 mini: true,
                 onPressed: () {
                   if (_messageController.text.trim().isNotEmpty) {
-                    _sendMessage(_messageController.text.trim());
+                    _sendQuickMessage(_messageController.text.trim());
                     _messageController.clear();
                   }
                 },
@@ -1505,24 +1370,19 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
     );
   }
 
-  void _sendMessage(String message) async {
-    try {
-      final currentUser = await DatabaseService.getCurrentUser();
-      if (currentUser != null && discussions.isNotEmpty) {
-        final messageObj = DiscussionMessage(
-          id: 0, // Will be assigned by backend
-          discussionId: discussions.first.id, // Send to first discussion for simplicity
-          message: message,
-          authorId: currentUser.id,
-          timestamp: DateTime.now(),
+  void _sendQuickMessage(String message) async {
+    if (discussions.isNotEmpty) {
+      try {
+        await DataStore.addDiscussionMessage(discussions.first.id, message);
+        _loadProjectData();
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to send message')),
         );
-
-        await DatabaseService.addDiscussionMessage(messageObj);
-        _loadProjectData(); // Reload to show new message
       }
-    } catch (e) {
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to send message: ${e.toString()}')),
+        SnackBar(content: Text('Create a discussion first')),
       );
     }
   }
@@ -1551,24 +1411,15 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
             onPressed: () async {
               if (titleController.text.trim().isNotEmpty) {
                 try {
-                  final currentUser = await DatabaseService.getCurrentUser();
-                  if (currentUser != null) {
-                    final discussion = Discussion(
-                      id: 0, // Will be assigned by backend
-                      projectId: widget.project.id,
-                      title: titleController.text.trim(),
-                      messages: [],
-                      createdAt: DateTime.now(),
-                      createdBy: currentUser.id,
-                    );
-
-                    await DatabaseService.createDiscussion(discussion);
-                    Navigator.pop(context);
-                    _loadProjectData();
-                  }
+                  await DataStore.createDiscussion(titleController.text.trim(), widget.project.id);
+                  Navigator.pop(context);
+                  _loadProjectData();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Discussion created successfully!')),
+                  );
                 } catch (e) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Failed to create discussion: ${e.toString()}')),
+                    SnackBar(content: Text('Failed to create discussion')),
                   );
                 }
               }
@@ -1583,9 +1434,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
   void _showTaskDialog({Task? task}) {
     final titleController = TextEditingController(text: task?.title ?? '');
     final descriptionController = TextEditingController(text: task?.description ?? '');
-    int? selectedAssignee = task?.assigneeId;
+    String? selectedAssignee = task?.assigneeId;
     DateTime? selectedDate = task?.dueDate;
-    TaskStatus selectedStatus = task?.status ?? TaskStatus.toDo;
 
     showDialog(
       context: context,
@@ -1613,18 +1463,18 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
                   maxLines: 3,
                 ),
                 SizedBox(height: 16),
-                DropdownButtonFormField<int?>(
+                DropdownButtonFormField<String>(
                   value: selectedAssignee,
                   decoration: InputDecoration(
                     labelText: 'Assignee',
                     border: OutlineInputBorder(),
                   ),
                   items: [
-                    DropdownMenuItem<int?>(
+                    DropdownMenuItem<String>(
                       value: null,
                       child: Text('Unassigned'),
                     ),
-                    ...members.map((member) => DropdownMenuItem<int?>(
+                    ...members.map((member) => DropdownMenuItem<String>(
                       value: member.id,
                       child: Text(member.name),
                     )),
@@ -1635,34 +1485,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
                     });
                   },
                 ),
-                if (task != null) ...[
-                  SizedBox(height: 16),
-                  DropdownButtonFormField<TaskStatus>(
-                    value: selectedStatus,
-                    decoration: InputDecoration(
-                      labelText: 'Status',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: TaskStatus.values.map((status) {
-                      String statusText = status == TaskStatus.toDo
-                          ? 'To Do'
-                          : status == TaskStatus.inProgress
-                          ? 'In Progress'
-                          : 'Done';
-                      return DropdownMenuItem<TaskStatus>(
-                        value: status,
-                        child: Text(statusText),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() {
-                          selectedStatus = value;
-                        });
-                      }
-                    },
-                  ),
-                ],
                 SizedBox(height: 16),
                 InkWell(
                   onTap: () async {
@@ -1706,28 +1528,31 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
               onPressed: () async {
                 if (titleController.text.isNotEmpty) {
                   try {
-                    final taskObj = Task(
-                      id: task?.id ?? 0,
-                      title: titleController.text.trim(),
-                      description: descriptionController.text.trim(),
-                      projectId: widget.project.id,
-                      assigneeId: selectedAssignee,
-                      dueDate: selectedDate,
-                      status: selectedStatus,
-                      createdAt: task?.createdAt ?? DateTime.now(),
-                    );
-
                     if (task == null) {
-                      await DatabaseService.createTask(taskObj);
+                      await DataStore.createTask(
+                        titleController.text,
+                        descriptionController.text,
+                        widget.project.id,
+                        assigneeId: selectedAssignee,
+                        dueDate: selectedDate,
+                      );
                     } else {
-                      await DatabaseService.updateTask(taskObj);
+                      final updatedTask = task.copyWith(
+                        title: titleController.text,
+                        description: descriptionController.text,
+                        assigneeId: selectedAssignee,
+                        dueDate: selectedDate,
+                      );
+                      await DataStore.updateTask(updatedTask);
                     }
-
                     Navigator.pop(context);
                     _loadProjectData();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(task == null ? 'Task created successfully!' : 'Task updated successfully!')),
+                    );
                   } catch (e) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Failed to save task: ${e.toString()}')),
+                      SnackBar(content: Text('Failed to ${task == null ? 'create' : 'update'} task')),
                     );
                   }
                 }
@@ -1762,12 +1587,15 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
                 if (value != null) {
                   try {
                     final updatedTask = task.copyWith(status: value);
-                    await DatabaseService.updateTask(updatedTask);
+                    await DataStore.updateTask(updatedTask);
                     Navigator.pop(context);
                     _loadProjectData();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Task status updated successfully!')),
+                    );
                   } catch (e) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Failed to update task: ${e.toString()}')),
+                      SnackBar(content: Text('Failed to update task status')),
                     );
                   }
                 }
@@ -1785,13 +1613,49 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
     );
   }
 
+  void _showDeleteTaskDialog(Task task) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete Task'),
+        content: Text('Are you sure you want to delete "${task.title}"? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              try {
+                await DataStore.deleteTask(task.id);
+                Navigator.pop(context);
+                _loadProjectData();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Task deleted successfully!')),
+                );
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Failed to delete task')),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            child: Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showTaskDetail(Task task) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => TaskDetailScreen(task: task, members: members),
       ),
-    );
+    ).then((_) => _loadProjectData());
   }
 
   void _showAddMemberDialog() {
@@ -1819,21 +1683,15 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
             onPressed: () async {
               if (emailController.text.isNotEmpty) {
                 try {
-                  // First, search for user by email
-                  final user = await DatabaseService.searchUserByEmail(emailController.text.trim());
-
-                  if (user != null) {
-                    await DatabaseService.addProjectMember(widget.project.id, user.id);
-                    Navigator.pop(context);
-                    _loadProjectData();
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('User not found with this email')),
-                    );
-                  }
+                  await DataStore.addProjectMember(widget.project.id, emailController.text);
+                  Navigator.pop(context);
+                  _loadProjectData();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Member added successfully!')),
+                  );
                 } catch (e) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Failed to add member: ${e.toString()}')),
+                    SnackBar(content: Text('Failed to add member')),
                   );
                 }
               }
@@ -1853,7 +1711,219 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
   }
 }
 
-// Task Detail Screen with HTTP integration
+// Discussion Detail Screen
+class DiscussionDetailScreen extends StatefulWidget {
+  final Discussion discussion;
+  final List<User> members;
+
+  DiscussionDetailScreen({required this.discussion, required this.members});
+
+  @override
+  _DiscussionDetailScreenState createState() => _DiscussionDetailScreenState();
+}
+
+class _DiscussionDetailScreenState extends State<DiscussionDetailScreen> {
+  final TextEditingController _messageController = TextEditingController();
+  List<DiscussionMessage> messages = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMessages();
+  }
+
+  void _loadMessages() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      messages = await DataStore.getDiscussionMessages(widget.discussion.id);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load messages')),
+      );
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.discussion.title),
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: _isLoading
+                ? Center(child: CircularProgressIndicator())
+                : messages.isEmpty
+                ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.chat_bubble_outline, size: 64, color: Colors.grey.shade400),
+                  SizedBox(height: 16),
+                  Text('No messages yet', style: TextStyle(fontSize: 18, color: Colors.grey.shade600)),
+                  SizedBox(height: 8),
+                  Text('Start the conversation', style: TextStyle(color: Colors.grey.shade500)),
+                ],
+              ),
+            )
+                : ListView.builder(
+              padding: EdgeInsets.all(16),
+              itemCount: messages.length,
+              itemBuilder: (context, index) {
+                final message = messages[index];
+                final author = widget.members.firstWhere(
+                      (m) => m.id == message.authorId,
+                  orElse: () => User(id: '', name: 'Unknown', email: ''),
+                );
+                return _buildMessageBubble(message, author);
+              },
+            ),
+          ),
+          Container(
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: Colors.grey.shade300)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _messageController,
+                    decoration: InputDecoration(
+                      hintText: 'Type a message...',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    ),
+                    onSubmitted: (value) {
+                      if (value.trim().isNotEmpty) {
+                        _sendMessage(value.trim());
+                        _messageController.clear();
+                      }
+                    },
+                  ),
+                ),
+                SizedBox(width: 8),
+                FloatingActionButton(
+                  mini: true,
+                  onPressed: () {
+                    if (_messageController.text.trim().isNotEmpty) {
+                      _sendMessage(_messageController.text.trim());
+                      _messageController.clear();
+                    }
+                  },
+                  child: Icon(Icons.send, size: 16),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMessageBubble(DiscussionMessage message, User author) {
+    final isCurrentUser = message.authorId == DataStore._currentUser?.id;
+
+    return Container(
+      margin: EdgeInsets.only(bottom: 12),
+      child: Row(
+        mainAxisAlignment: isCurrentUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        children: [
+          if (!isCurrentUser) ...[
+            CircleAvatar(
+              radius: 16,
+              backgroundColor: Colors.blue.shade100,
+              child: Text(
+                author.name.isNotEmpty ? author.name[0].toUpperCase() : 'U',
+                style: TextStyle(fontSize: 12, color: Colors.blue.shade700),
+              ),
+            ),
+            SizedBox(width: 8),
+          ],
+          Flexible(
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: isCurrentUser ? Colors.blue.shade500 : Colors.grey.shade200,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (!isCurrentUser)
+                    Text(
+                      author.name,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  SizedBox(height: isCurrentUser ? 0 : 4),
+                  Text(
+                    message.message,
+                    style: TextStyle(
+                      color: isCurrentUser ? Colors.white : Colors.black,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    '${message.timestamp.hour}:${message.timestamp.minute.toString().padLeft(2, '0')}',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: isCurrentUser ? Colors.white70 : Colors.grey.shade500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (isCurrentUser) ...[
+            SizedBox(width: 8),
+            CircleAvatar(
+              radius: 16,
+              backgroundColor: Colors.blue.shade100,
+              child: Text(
+                author.name.isNotEmpty ? author.name[0].toUpperCase() : 'U',
+                style: TextStyle(fontSize: 12, color: Colors.blue.shade700),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _sendMessage(String message) async {
+    try {
+      await DataStore.addDiscussionMessage(widget.discussion.id, message);
+      _loadMessages();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to send message')),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    super.dispose();
+  }
+}
+
+// Task Detail Screen
 class TaskDetailScreen extends StatefulWidget {
   final Task task;
   final List<User> members;
@@ -1877,7 +1947,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
   Widget build(BuildContext context) {
     final assignee = widget.members.firstWhere(
           (member) => member.id == currentTask.assigneeId,
-      orElse: () => User(id: 0, name: 'Unassigned', email: ''),
+      orElse: () => User(id: '', name: 'Unassigned', email: ''),
     );
 
     Color statusColor = currentTask.status == TaskStatus.toDo
@@ -1899,7 +1969,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
           IconButton(
             icon: Icon(Icons.edit),
             onPressed: () {
-              // TODO: Edit task
+              Navigator.pop(context);
             },
           ),
         ],
@@ -1909,7 +1979,6 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Task Title
             Text(
               currentTask.title,
               style: TextStyle(
@@ -1919,7 +1988,6 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
             ),
             SizedBox(height: 16),
 
-            // Status Badge
             Container(
               padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
@@ -1937,7 +2005,6 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
             ),
             SizedBox(height: 24),
 
-            // Description Section
             _buildSection(
               'Description',
               Icons.description,
@@ -1946,12 +2013,11 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                   : 'No description provided',
             ),
 
-            // Assignee Section
             _buildSection(
               'Assignee',
               Icons.person,
               assignee.name,
-              trailing: assignee.id != 0
+              trailing: assignee.id.isNotEmpty
                   ? CircleAvatar(
                 backgroundColor: Colors.blue.shade100,
                 child: Text(
@@ -1965,7 +2031,6 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                   : null,
             ),
 
-            // Due Date Section
             if (currentTask.dueDate != null)
               _buildSection(
                 'Due Date',
@@ -1973,7 +2038,6 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                 '${currentTask.dueDate!.day}/${currentTask.dueDate!.month}/${currentTask.dueDate!.year}',
               ),
 
-            // Created Info
             _buildSection(
               'Created',
               Icons.info,
@@ -1982,7 +2046,6 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
 
             SizedBox(height: 32),
 
-            // Action Buttons
             Row(
               children: [
                 Expanded(
@@ -2077,13 +2140,23 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
               title: Text(statusText),
               value: status,
               groupValue: currentTask.status,
-              onChanged: (TaskStatus? value) {
+              onChanged: (TaskStatus? value) async {
                 if (value != null) {
-                  setState(() {
-                    currentTask = currentTask.copyWith(status: value);
-                  });
-                  // TODO: Update task status in database
-                  Navigator.pop(context);
+                  try {
+                    final updatedTask = currentTask.copyWith(status: value);
+                    await DataStore.updateTask(updatedTask);
+                    setState(() {
+                      currentTask = updatedTask;
+                    });
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Task status updated successfully!')),
+                    );
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Failed to update task status')),
+                    );
+                  }
                 }
               },
             );
@@ -2111,10 +2184,19 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
             child: Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () {
-              // TODO: Delete task from database
-              Navigator.pop(context); // Close dialog
-              Navigator.pop(context); // Go back to project detail
+            onPressed: () async {
+              try {
+                await DataStore.deleteTask(currentTask.id);
+                Navigator.pop(context);
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Task deleted successfully!')),
+                );
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Failed to delete task')),
+                );
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
@@ -2131,114 +2213,120 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
 class ProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    // Mock user data
-    final user = User(
-      id: 1,
-      name: 'John Doe',
-      email: 'john.doe@example.com',
-    );
+    return FutureBuilder<User?>(
+      future: DataStore.getCurrentUser(),
+      builder: (context, snapshot) {
+        final user = snapshot.data ?? User(id: '1', name: 'John Doe', email: 'john.doe@example.com');
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Profile'),
-      ),
-      body: SingleChildScrollView(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          children: [
-            // Profile Avatar
-            Center(
-              child: Column(
-                children: [
-                  CircleAvatar(
-                    radius: 60,
-                    backgroundColor: Colors.blue.shade100,
-                    child: Text(
-                      user.name[0].toUpperCase(),
-                      style: TextStyle(
-                        fontSize: 36,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue.shade700,
+        return Scaffold(
+          appBar: AppBar(
+            title: Text('Profile'),
+          ),
+          body: SingleChildScrollView(
+            padding: EdgeInsets.all(16),
+            child: Column(
+              children: [
+                Center(
+                  child: Column(
+                    children: [
+                      CircleAvatar(
+                        radius: 60,
+                        backgroundColor: Colors.blue.shade100,
+                        child: Text(
+                          user.name[0].toUpperCase(),
+                          style: TextStyle(
+                            fontSize: 36,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue.shade700,
+                          ),
+                        ),
                       ),
-                    ),
+                      SizedBox(height: 16),
+                      Text(
+                        user.name,
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        user.email,
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
                   ),
-                  SizedBox(height: 16),
-                  Text(
-                    user.name,
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    user.email,
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(height: 32),
-
-            // Profile Options
-            _buildProfileOption(
-              icon: Icons.person,
-              title: 'Edit Profile',
-              onTap: () {
-                // TODO: Navigate to edit profile
-              },
-            ),
-            _buildProfileOption(
-              icon: Icons.notifications,
-              title: 'Notifications',
-              onTap: () {
-                // TODO: Navigate to notification settings
-              },
-            ),
-            _buildProfileOption(
-              icon: Icons.security,
-              title: 'Security',
-              onTap: () {
-                // TODO: Navigate to security settings
-              },
-            ),
-            _buildProfileOption(
-              icon: Icons.help,
-              title: 'Help & Support',
-              onTap: () {
-                // TODO: Navigate to help
-              },
-            ),
-            _buildProfileOption(
-              icon: Icons.info,
-              title: 'About',
-              onTap: () {
-                _showAboutDialog(context);
-              },
-            ),
-            SizedBox(height: 24),
-
-            // Logout Button
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () => _showLogoutDialog(context),
-                icon: Icon(Icons.logout, color: Colors.red),
-                label: Text('Logout', style: TextStyle(color: Colors.red)),
-                style: OutlinedButton.styleFrom(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  side: BorderSide(color: Colors.red),
                 ),
-              ),
+                SizedBox(height: 32),
+
+                _buildProfileOption(
+                  icon: Icons.person,
+                  title: 'Edit Profile',
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Edit profile not implemented in demo')),
+                    );
+                  },
+                ),
+                _buildProfileOption(
+                  icon: Icons.notifications,
+                  title: 'Notifications',
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Notifications not implemented in demo')),
+                    );
+                  },
+                ),
+                _buildProfileOption(
+                  icon: Icons.security,
+                  title: 'Security',
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Security settings not implemented in demo')),
+                    );
+                  },
+                ),
+                _buildProfileOption(
+                  icon: Icons.help,
+                  title: 'Help & Support',
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Help & Support not implemented in demo')),
+                    );
+                  },
+                ),
+                _buildProfileOption(
+                  icon: Icons.info,
+                  title: 'About',
+                  onTap: () {
+                    _showAboutDialog(context);
+                  },
+                ),
+                SizedBox(height: 24),
+
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _showLogoutDialog(context),
+                    icon: Icon(Icons.logout, color: Colors.red),
+                    label: Text('Logout', style: TextStyle(color: Colors.red)),
+                    style: OutlinedButton.styleFrom(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      side: BorderSide(color: Colors.red),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
+
   Widget _buildProfileOption({
     required IconData icon,
     required String title,
@@ -2271,7 +2359,7 @@ class ProfileScreen extends StatelessWidget {
             Text('Advanced Team Collaboration Platform'),
             SizedBox(height: 16),
             Text(
-              'Built with Flutter for seamless team collaboration and project management.',
+              'Built with Flutter for seamless team collaboration and project management. All data is stored locally in memory for this demo.',
               style: TextStyle(color: Colors.grey.shade600),
             ),
           ],
@@ -2298,8 +2386,8 @@ class ProfileScreen extends StatelessWidget {
             child: Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () {
-              // TODO: Clear user session
+            onPressed: () async {
+              await DataStore.logoutUser();
               Navigator.pushNamedAndRemoveUntil(
                 context,
                 '/login',
