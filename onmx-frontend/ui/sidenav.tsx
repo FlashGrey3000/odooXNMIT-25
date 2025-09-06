@@ -15,7 +15,7 @@ import clsx from "clsx";
 const links = [
   { name: "Dashboard", href: "/dashboard", icon: HomeIcon },
   { name: "Projects", href: "/projects", icon: FolderIcon },
-  { name: "Tasks", href: "/projects/1/tasks", icon: ClipboardDocumentListIcon }, // adjust dynamically later
+  { name: "Tasks", href: "/tasks", icon: ClipboardDocumentListIcon }, // adjust dynamically later
   { name: "Profile", href: "/profile", icon: UserCircleIcon },
 ];
 
