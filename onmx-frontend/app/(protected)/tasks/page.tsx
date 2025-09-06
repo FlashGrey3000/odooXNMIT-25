@@ -50,6 +50,14 @@ export default function TasksPage() {
         assigned_to: "Bob",
         due_date: "2025-09-12",
       },
+      {
+        task_id: 3,
+        title: "Finish the References Table",
+        description: "Create all the foreign keys and update the mongoDB databases",
+        status: "in-progress",
+        assigned_to: "Gokul",
+        due_date: "2025-09-30",
+      }
     ]);
   }, []);
 

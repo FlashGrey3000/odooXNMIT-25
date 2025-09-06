@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   PieChart,
@@ -11,7 +12,18 @@ import {
   Legend,
 } from "recharts";
 
+import { useEffect } from 'react';
+
 export default function DashboardPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      router.push('/login');
+    }
+  }, [router]);
+
   // Synthetic Data
   const projects = [
     { project_id: 1, name: "Project Alpha", description: "AI system for fraud detection" },

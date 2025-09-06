@@ -69,8 +69,8 @@ export default function SideNav() {
 
         <form
           action={async () => {
-            sessionStorage.removeItem("token");
-            sessionStorage.removeItem("user");
+            localStorage.removeItem("token");
+            localStorage.removeItem("user");
             router.push("/login");
           }}
         >
