@@ -11,78 +11,47 @@ interface Project {
   description?: string;
 }
 
+interface User {
+  user_id: number;
+  name: string;
+  email: string;
+}
+
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
 
+  // Load user + token on mount
   useEffect(() => {
-    console.log(typeof window !== "undefined")
     if (typeof window !== "undefined") {
-      setUserId(localStorage.getItem("user_id"));
-      setToken(localStorage.getItem("token"));
-      console.log(userId, token)
+      const storedUser = localStorage.getItem("user");
+      const storedToken = localStorage.getItem("token");
+
+      if (storedUser) {
+        setUser(JSON.parse(storedUser));
+      }
+      if (storedToken) {
+        setToken(storedToken);
+      }
     }
   }, []);
 
-  async function createProject(name: string, description: string) {
-    if (!userId && !token) {
-      console.log("De naaddaaa")
-      return null;
-    }
-
-    try {
-      const res = await fetch(`${API_BASE}/projects/?user_id=${userId}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ name, description }),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        console.error("Error creating project:", errorData);
-        alert(`Error: ${errorData.detail || "Failed to create project"}`);
-        return null;
-      }
-
-      const data = await res.json();
-      return data;
-    } catch (err) {
-      console.error("Network error:", err);
-      alert("Could not connect to the server.");
-      return null;
-    }
-  }
-
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault();
-    const project = await createProject(newName, newDesc);
-    if (project) {
-      setProjects((prev) => [...prev, project]);
-      setNewName("");
-      setNewDesc("");
-      setIsModalOpen(false);
-    }
-  }
-
+  // Fetch projects for the current user
   useEffect(() => {
-    if (!userId || !token) {
+    if (!user || !token) {
       setLoading(false);
       return;
     }
 
     async function fetchProjects() {
       try {
-        const res = await fetch(`${API_BASE}/users/${userId}/projects/`, {
+        const res = await fetch(`${API_BASE}/users/${user?.user_id}/projects`, {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
@@ -101,7 +70,51 @@ export default function ProjectsPage() {
     }
 
     fetchProjects();
-  }, [userId, token]);
+  }, [user, token]);
+
+  // Create project
+  async function createProject(name: string, description: string) {
+    if (!user || !token) {
+      console.log("Missing user or token", { user, token });
+      return null;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/projects/?user_id=${user.user_id}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ name, description }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        console.error("Error creating project:", errorData);
+        alert(`Error: ${errorData.detail || "Failed to create project"}`);
+        return null;
+      }
+
+      return await res.json();
+    } catch (err) {
+      console.error("Network error:", err);
+      alert("Could not connect to the server.");
+      return null;
+    }
+  }
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    const project = await createProject(newName, newDesc);
+    if (project) {
+      setProjects((prev) => [...prev, project]);
+      setNewName("");
+      setNewDesc("");
+      setIsModalOpen(false);
+    }
+  }
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
