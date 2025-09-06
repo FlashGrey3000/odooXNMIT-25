@@ -59,3 +59,24 @@ class ProjectMemberOut(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+
+
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    password: Optional[str] = None  # will be hashed in CRUD
+
+
+# --- Project update ---
+class ProjectUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+
+# --- Task update ---
+class TaskUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    assignee_id: Optional[int] = None
+    status: Optional[str] = None
+    due_date: Optional[str] = None  # ISO date string
