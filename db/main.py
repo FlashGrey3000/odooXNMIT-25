@@ -10,7 +10,22 @@ from fastapi.middleware.cors import CORSMiddleware
 # Create tables if they don't exist
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="SynergySphere MVP")
+app = FastAPI(
+    title="SynergySphere API",
+    description="""
+    Project Collaboration Backend
+
+    Features:
+    - User Authentication (JWT)
+    - Project Management
+    - Role-Based Access Control
+    - Task Management
+    """,
+    version="1.0.0",
+    docs_url="/docs",        # Swagger UI
+    redoc_url="/redoc",      # ReDoc UI
+    openapi_url="/openapi.json"
+)
 
 app.add_middleware(
     CORSMiddleware,
