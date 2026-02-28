@@ -1,20 +1,33 @@
 version: "3.9"
 
 services:
+  # db:
+  #   image: mysql:8.0
+  #   container_name: synergysphere-db
+  #   restart: always
+  #   environment:
+  #     MYSQL_ROOT_PASSWORD: rootpassword
+  #     MYSQL_DATABASE: synergysphere
+  #     MYSQL_USER: devuser
+  #     MYSQL_PASSWORD: devpass
+  #   ports:
+  #     - "3306:3306"
+  #   volumes:
+  #     - db_data:/var/lib/mysql
+
+  # Uncomment for PostgreSQL instead:
   db:
-    image: mysql:8.0
+    image: postgres:15
     container_name: synergysphere-db
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: synergysphere
-      MYSQL_USER: devuser
-      MYSQL_PASSWORD: devpass
+      POSTGRES_DB: synergysphere
+      POSTGRES_USER: devuser
+      POSTGRES_PASSWORD: devpass
     ports:
-      - "3306:3306"
+      - "5432:5432"
     volumes:
-      - db_data:/var/lib/mysql
-      - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+      - db_data:/var/lib/postgresql/data
 
   redis:
     image: redis:7.0

@@ -1,34 +1,19 @@
-"use client";
+'use client';
 
-import { useParams } from 'next/navigation';
-import Link from 'next/link';
+import { useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 
-export default function TaskListPage() {
+export default function ProjectTasksRedirect() {
   const params = useParams();
-  const { projectId } = params;
+  const router = useRouter();
+
+  useEffect(() => {
+    router.replace(`/projects/${params.projectId}`);
+  }, [params.projectId, router]);
 
   return (
-    <div className="p-4">
-      <h1 className="text-2xl font-bold">Tasks for Project: {projectId}</h1>
-      <ul className="mt-4 space-y-2">
-        {/* Example tasks */}
-        <li>
-          <Link href={`/projects/${projectId}/tasks/1`} className="text-blue-500">
-            Task 1
-          </Link>
-        </li>
-        <li>
-          <Link href={`/projects/${projectId}/tasks/2`} className="text-blue-500">
-            Task 2
-          </Link>
-        </li>
-      </ul>
-      <Link
-        href={`/projects/${projectId}/tasks/new`}
-        className="mt-4 inline-block text-white bg-blue-500 px-4 py-2 rounded"
-      >
-        Create New Task
-      </Link>
+    <div className="flex justify-center items-center py-32">
+      <p className="text-gray-500 animate-pulse">Redirecting...</p>
     </div>
   );
 }

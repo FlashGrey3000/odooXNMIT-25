@@ -2,64 +2,45 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { authApi, ApiError } from "@/lib/api";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const fastAPIurl = "http://10.57.140.70:8000";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    const formData = new URLSearchParams();
-    formData.append("grant_type", "password");
-    formData.append("username", email);
-    formData.append("password", password);
+    setError("");
+    setLoading(true);
 
     try {
-      const res = await fetch(`${fastAPIurl}/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: formData.toString(),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        alert(errorData.detail || "Login failed");
-        return;
-      }
-
-      const data = await res.json();
-      console.log("Login success:", data);
-
-      // Save token
+      const data = await authApi.login(email, password);
       localStorage.setItem("token", data.access_token);
-      localStorage.setItem("user", JSON.stringify(data.user))
+      localStorage.setItem("user", JSON.stringify(data.user));
 
-      // Redirect to dashboard
+      // Set cookie for middleware
+      document.cookie = `auth-token=${data.access_token}; path=/`;
+
       router.push("/dashboard");
     } catch (err) {
-      console.error(err);
-      alert("Could not connect to the server.");
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError("Could not connect to the server.");
+      }
+    } finally {
+      setLoading(false);
     }
   };
-
 
   return (
     <div className="flex min-h-screen">
       <div className="hidden md:flex w-1/2 bg-gray-100 items-center justify-center flex-col p-10">
-        <img
-          src="/synergy_sphere_logo.png"
-          alt="Illustration"
-          className="w-2/3 mb-6"
-        />
-        <h2 className="text-3xl font-bold text-gray-800 text-center">
-          Welcome Back!
-        </h2>
+        <img src="/synergy_sphere_logo.png" alt="Logo" className="w-2/3 mb-6" />
+        <h2 className="text-3xl font-bold text-gray-800 text-center">Welcome Back!</h2>
         <p className="text-gray-600 mt-2 text-center max-w-md">
           Sign in to continue exploring amazing features and stay connected.
         </p>
@@ -67,9 +48,14 @@ export default function LoginPage() {
 
       <div className="flex w-full md:w-1/2 items-center justify-center p-8 md:bg-black bg-gray-100">
         <div className="max-w-md w-full md:bg-white md:p-10 rounded-2xl">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">
-            Login
-          </h2>
+          <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">Login</h2>
+
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+              {error}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-gray-700 mb-1">Email</label>
@@ -93,16 +79,16 @@ export default function LoginPage() {
             </div>
             <button
               type="submit"
-              className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition"
+              disabled={loading}
+              className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
             >
-              Sign In
+              {loading ? "Signing in..." : "Sign In"}
             </button>
           </form>
+
           <p className="text-center text-gray-600 mt-4">
-            Don’t have an account?{" "}
-            <a href="/signup" className="text-blue-600 hover:underline">
-              Sign up
-            </a>
+            Don't have an account?{" "}
+            <a href="/signup" className="text-blue-600 hover:underline">Sign up</a>
           </p>
         </div>
       </div>
